@@ -4,7 +4,8 @@ from sqlalchemy.exc import IntegrityError
 import requests
 import os
 from dotenv import load_dotenv
-
+from auth import hash_password, verify_password, create_access_token
+from schemas import UserCreate, UserResponse, Token
 from database import get_db, engine, Base
 from models import User
 from schemas import UserCreate, UserResponse
@@ -17,7 +18,23 @@ NASA_API_KEY = os.getenv("NASA_API_KEY")
 app = FastAPI(title="Cosmic Tracker API", version="0.1.0")
 
 Base.metadata.create_all(bind=engine)  # crea las tablas si no existen
+from fastapi.security import OAuth2PasswordBearer
+from auth import hash_password, verify_password, create_access_token, decode_access_token
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    payload = decode_access_token(token)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+
+    email = payload.get("sub")
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+
+    return user
 
 @app.get("/")
 def read_root():
@@ -86,3 +103,20 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
     db.refresh(new_user)
     return new_user
+
+@app.post("/auth/login", response_model=Token)
+def login(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user.email).first()
+
+    if not db_user or not verify_password(user.password, db_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
+
+    token = create_access_token({"sub": db_user.email})
+    return {"access_token": token, "token_type": "bearer"}
+
+@app.get("/auth/me", response_model=UserResponse)
+def read_current_user(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+
