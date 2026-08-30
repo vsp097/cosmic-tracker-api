@@ -13,7 +13,7 @@ from auth import hash_password
 from models import User, Favorite
 from schemas import UserCreate, UserResponse, Token, FavoriteCreate, FavoriteResponse
 load_dotenv()
-
+from services import calculate_similarity, classify_planet
 NASA_API_KEY = os.getenv("NASA_API_KEY")
 
 app = FastAPI(title="Cosmic Tracker API", version="0.1.0")
@@ -176,4 +176,65 @@ def delete_favorite(
     return {"detail": "Favorito eliminado"}
 
 
+def fetch_exoplanets(limit: int = 100):
+    """Consulta el archivo de exoplanetas de la NASA."""
+    url = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
 
+    query = f"""
+        SELECT TOP {limit}
+            pl_name, hostname, disc_year, pl_rade, pl_bmasse, pl_eqt, sy_dist
+        FROM ps
+        WHERE pl_rade IS NOT NULL AND pl_eqt IS NOT NULL
+        ORDER BY disc_year DESC
+    """
+
+    response = requests.get(url, params={"query": query, "format": "json"}, timeout=30)
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail="No se pudo consultar el archivo de exoplanetas")
+
+    return response.json()
+
+
+def enrich_planet(p: dict) -> dict:
+    """Agrega índice de similitud y clasificación a un planeta."""
+    radius = p.get("pl_rade")
+    temp = p.get("pl_eqt")
+
+    return {
+        "name": p.get("pl_name"),
+        "host_star": p.get("hostname"),
+        "discovery_year": p.get("disc_year"),
+        "radius_earth": radius,
+        "mass_earth": p.get("pl_bmasse"),
+        "temperature_k": temp,
+        "distance_parsecs": p.get("sy_dist"),
+        "earth_similarity": calculate_similarity(radius, temp),
+        "classification": classify_planet(radius, temp)
+    }
+
+
+@app.get("/exoplanets")
+def get_exoplanets(limit: int = 20):
+    data = fetch_exoplanets(limit)
+    resultado = [enrich_planet(p) for p in data]
+    return {"count": len(resultado), "exoplanets": resultado}
+
+
+@app.get("/exoplanets/habitable")
+def get_habitable_exoplanets(limit: int = 10):
+    """
+    Devuelve los exoplanetas más parecidos a la Tierra,
+    ordenados por índice de similitud.
+    """
+    data = fetch_exoplanets(500)
+    enriched = [enrich_planet(p) for p in data]
+
+    habitable = [p for p in enriched if p["classification"] == "potentially_habitable"]
+    habitable.sort(key=lambda p: p["earth_similarity"], reverse=True)
+
+    return {
+        "count": len(habitable[:limit]),
+        "total_analyzed": len(enriched),
+        "exoplanets": habitable[:limit]
+    }
