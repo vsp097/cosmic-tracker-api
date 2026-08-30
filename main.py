@@ -10,7 +10,8 @@ from database import get_db, engine, Base
 from models import User
 from schemas import UserCreate, UserResponse
 from auth import hash_password
-
+from models import User, Favorite
+from schemas import UserCreate, UserResponse, Token, FavoriteCreate, FavoriteResponse
 load_dotenv()
 
 NASA_API_KEY = os.getenv("NASA_API_KEY")
@@ -117,6 +118,62 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
 @app.get("/auth/me", response_model=UserResponse)
 def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@app.post("/favorites", response_model=FavoriteResponse)
+def create_favorite(
+    favorite: FavoriteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    existing = db.query(Favorite).filter(
+        Favorite.user_id == current_user.id,
+        Favorite.item_type == favorite.item_type,
+        Favorite.item_id == favorite.item_id
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="Este item ya está en tus favoritos")
+
+    new_favorite = Favorite(
+        user_id=current_user.id,
+        item_type=favorite.item_type,
+        item_id=favorite.item_id,
+        title=favorite.title,
+        image_url=favorite.image_url
+    )
+
+    db.add(new_favorite)
+    db.commit()
+    db.refresh(new_favorite)
+    return new_favorite
+
+
+@app.get("/favorites", response_model=list[FavoriteResponse])
+def list_favorites(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return db.query(Favorite).filter(Favorite.user_id == current_user.id).all()
+
+
+@app.delete("/favorites/{favorite_id}")
+def delete_favorite(
+    favorite_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    favorite = db.query(Favorite).filter(
+        Favorite.id == favorite_id,
+        Favorite.user_id == current_user.id
+    ).first()
+
+    if not favorite:
+        raise HTTPException(status_code=404, detail="Favorito no encontrado")
+
+    db.delete(favorite)
+    db.commit()
+    return {"detail": "Favorito eliminado"}
 
 
 
