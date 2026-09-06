@@ -1,5 +1,8 @@
 # Cosmic Tracker API
 
+**Live demo:** https://cosmic-tracker-api.onrender.com/docs
+(Note: hosted on Render's free tier — first request may take ~30s to wake up)
+
 A REST API that consumes NASA's public data and lets users register, authenticate, and save their favorite space content.
 
 Built as a learning project to practice backend development with FastAPI, PostgreSQL, and JWT authentication.
@@ -30,6 +33,14 @@ Built as a learning project to practice backend development with FastAPI, Postgr
 | GET | `/auth/me` | Get current user | Yes |
 | GET | `/space/picture-of-the-day` | NASA's Astronomy Picture of the Day | No |
 | GET | `/mars/photos` | Mars rover photos | No |
+| GET | `/exoplanets` | List exoplanets with Earth similarity index | No |
+| GET | `/exoplanets/habitable` | Potentially habitable planets, ranked | No |
+| GET | `/exoplanets/stats/by-year` | Discoveries per year | No |
+| GET | `/exoplanets/stats/summary` | Aggregate statistics | No |
+| GET | `/space-weather/flares` | Recent solar flares | No |
+| POST | `/favorites` | Create a favorite | Yes |
+| GET | `/favorites` | List current user's favorites | Yes |
+| DELETE | `/favorites/{id}` | Delete a favorite | Yes |
 
 ## Running Locally
 
@@ -63,10 +74,20 @@ Interactive docs available at `http://localhost:8000/docs`
 
 The Mars Rover Photos endpoint depends on a third-party maintained service that is currently unavailable. The endpoint handles this failure gracefully and returns a clear error message.
 
+## Earth Similarity Index
+
+The `earth_similarity` score returned by the exoplanet endpoints is a simplified index based only on a planet's radius and equilibrium temperature compared to Earth's own values. It does not replace the scientific habitability models used in real research, which also account for atmosphere composition, host star type, orbital stability, and other factors.
+
+## Testing
+
+```bash
+pytest -v
+```
+
 ## Roadmap
 
-- [ ] Favorites system (save missions and images per user)
-- [ ] Exoplanet data with habitability index
-- [ ] Space weather (solar flares)
-- [ ] Automated tests with pytest
-- [ ] Deployment
+- [x] Favorites system (save missions and images per user)
+- [x] Exoplanet data with habitability index
+- [x] Space weather (solar flares)
+- [x] Automated tests with pytest
+- [x] Deployment
