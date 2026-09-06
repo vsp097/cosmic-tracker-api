@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from datetime import datetime
 
 
@@ -8,11 +8,10 @@ class UserCreate(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str
-
-    class Config:
-        from_attributes = True
 
 
 class Token(BaseModel):
@@ -28,12 +27,11 @@ class FavoriteCreate(BaseModel):
 
 
 class FavoriteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     item_type: str
     item_id: str
     title: str | None
     image_url: str | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True

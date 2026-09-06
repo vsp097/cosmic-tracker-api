@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import requests
 import os
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from auth import hash_password, verify_password, create_access_token
 from schemas import UserCreate, UserResponse, Token
@@ -88,6 +89,37 @@ def get_apod(date: str = None):
         "image_url": data.get("url"),
         "media_type": data.get("media_type")
     }
+
+
+@app.get("/space-weather/flares")
+def get_solar_flares(start_date: str = None, end_date: str = None):
+    if end_date is None:
+        end_date = datetime.utcnow().strftime("%Y-%m-%d")
+    if start_date is None:
+        start_date = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")
+
+    url = "https://api.nasa.gov/DONKI/FLR"
+    params = {"startDate": start_date, "endDate": end_date, "api_key": NASA_API_KEY}
+    response = requests.get(url, params=params)
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Error de NASA API: {response.text}")
+
+    data = response.json()
+    flares = [
+        {
+            "id": flare.get("flrID"),
+            "begin_time": flare.get("beginTime"),
+            "peak_time": flare.get("peakTime"),
+            "class_type": flare.get("classType"),
+            "source_location": flare.get("sourceLocation"),
+        }
+        for flare in data
+    ]
+
+    flares.sort(key=lambda f: f["begin_time"] or "", reverse=True)
+
+    return {"count": len(flares), "flares": flares}
 
 
 @app.post("/auth/register", response_model=UserResponse)
@@ -237,4 +269,56 @@ def get_habitable_exoplanets(limit: int = 10):
         "count": len(habitable[:limit]),
         "total_analyzed": len(enriched),
         "exoplanets": habitable[:limit]
+    }
+
+
+@app.get("/exoplanets/stats/by-year")
+def get_exoplanets_stats_by_year():
+    data = fetch_exoplanets(1000)
+    enriched = [enrich_planet(p) for p in data]
+
+    counts = {}
+    for p in enriched:
+        year = p["discovery_year"]
+        if year is None:
+            continue
+        counts[year] = counts.get(year, 0) + 1
+
+    by_year = [
+        {"year": year, "count": count}
+        for year, count in sorted(counts.items(), reverse=True)
+    ]
+
+    return {"total": len(enriched), "by_year": by_year}
+
+
+@app.get("/exoplanets/stats/summary")
+def get_exoplanets_stats_summary():
+    data = fetch_exoplanets(1000)
+    enriched = [enrich_planet(p) for p in data]
+
+    by_classification = {
+        "gas_giant": 0,
+        "mini_neptune": 0,
+        "potentially_habitable": 0,
+        "too_hot": 0,
+        "too_cold": 0
+    }
+    for p in enriched:
+        if p["classification"] in by_classification:
+            by_classification[p["classification"]] += 1
+
+    if enriched:
+        average_similarity = round(sum(p["earth_similarity"] for p in enriched) / len(enriched), 3)
+    else:
+        average_similarity = 0.0
+
+    habitable = [p for p in enriched if p["classification"] == "potentially_habitable"]
+    most_earth_like = max(habitable, key=lambda p: p["earth_similarity"]) if habitable else None
+
+    return {
+        "total_analyzed": len(enriched),
+        "by_classification": by_classification,
+        "average_similarity": average_similarity,
+        "most_earth_like": most_earth_like
     }
