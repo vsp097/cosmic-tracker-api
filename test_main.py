@@ -126,3 +126,58 @@ def test_delete_favorite_with_other_users_token_returns_404():
 
     delete_response = client.delete(f"/favorites/{favorite_id}", headers=auth_headers(other_token))
     assert delete_response.status_code == 404
+
+# ---------------------------------------------------------------
+# Login por formulario (el que usa el botón Authorize de /docs)
+# ---------------------------------------------------------------
+
+def test_token_endpoint_accepts_form_and_returns_token():
+    email, password, _ = register_user()
+    response = client.post(
+        "/auth/token",
+        data={"username": email, "password": password},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "access_token" in body
+    assert body["token_type"] == "bearer"
+
+
+def test_token_from_form_login_works_on_protected_route():
+    email, password, _ = register_user()
+    token = client.post(
+        "/auth/token",
+        data={"username": email, "password": password},
+    ).json()["access_token"]
+
+    response = client.get("/auth/me", headers=auth_headers(token))
+    assert response.status_code == 200
+    assert response.json()["email"] == email
+
+
+def test_token_endpoint_wrong_password_returns_401():
+    email, _, _ = register_user()
+    response = client.post(
+        "/auth/token",
+        data={"username": email, "password": "wrong-password"},
+    )
+    assert response.status_code == 401
+
+
+def test_register_short_password_returns_422():
+    response = client.post(
+        "/auth/register",
+        json={"email": unique_email(), "password": "corta"},
+    )
+    assert response.status_code == 422
+
+
+def test_debug_key_endpoint_no_longer_exists():
+    """El endpoint /debug/key filtraba parte de la llave de la NASA."""
+    assert client.get("/debug/key").status_code == 404
+
+
+def test_exoplanets_limit_is_capped():
+    response = client.get("/exoplanets", params={"limit": 100000})
+    assert response.status_code == 422

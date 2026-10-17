@@ -1,7 +1,10 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
-from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
+
 from database import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -9,11 +12,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    favorites = relationship("Favorite", back_populates="user")
 
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
-from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+    favorites = relationship("Favorite", back_populates="user")
 
 
 class Favorite(Base):
@@ -27,4 +27,4 @@ class Favorite(Base):
     image_url = Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    user = relationship("User", back_populates="favorites")    
+    user = relationship("User", back_populates="favorites")
